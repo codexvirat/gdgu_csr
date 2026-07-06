@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
 import { requireTrainee } from "@/lib/trainee-auth";
 import { db } from "@/lib/db";
-import { resolveUploadPath } from "@/lib/storage";
+import { readUploadedFile } from "@/lib/storage";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const trainee = await requireTrainee();
@@ -12,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!certificate) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   try {
-    const data = await readFile(resolveUploadPath(certificate.fileUrl));
+    const { data } = await readUploadedFile(certificate.fileUrl);
     return new NextResponse(data, {
       headers: {
         "Content-Type": "application/pdf",

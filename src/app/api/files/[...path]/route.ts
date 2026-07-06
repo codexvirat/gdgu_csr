@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { requireUser } from "@/lib/auth";
-import { resolveUploadPath } from "@/lib/storage";
+import { readUploadedFile } from "@/lib/storage";
 
 const IMAGE_MIME_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -19,10 +18,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const fileKey = segments.join("/");
 
   try {
-    const filePath = resolveUploadPath(fileKey);
-    const data = await readFile(filePath);
+    const { data, contentType: storedContentType } = await readUploadedFile(fileKey);
     const name = request.nextUrl.searchParams.get("name") ?? segments[segments.length - 1];
-    const contentType = IMAGE_MIME_TYPES[path.extname(fileKey).toLowerCase()] ?? "application/octet-stream";
+    const contentType =
+      storedContentType || IMAGE_MIME_TYPES[path.extname(fileKey).toLowerCase()] || "application/octet-stream";
     return new NextResponse(data, {
       headers: {
         "Content-Type": contentType,

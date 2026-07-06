@@ -1,9 +1,8 @@
 import "server-only";
 import crypto from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import { db } from "@/lib/db";
-import { saveBuffer, resolveUploadPath } from "@/lib/storage";
+import { saveBuffer, readUploadedFile } from "@/lib/storage";
 import { qrPngBuffer } from "@/lib/qrcode";
 import { logAudit } from "@/lib/audit";
 
@@ -63,7 +62,7 @@ function drawCentered(page: PDFPage, text: string, y: number, font: PDFFont, siz
 /** Embeds a logo/signature/stamp image, trying PNG then JPG; returns null (skips silently) if the file is unreadable or unsupported. */
 async function embedImage(pdf: PDFDocument, fileKey: string) {
   try {
-    const bytes = await readFile(resolveUploadPath(fileKey));
+    const { data: bytes } = await readUploadedFile(fileKey);
     try {
       return await pdf.embedPng(bytes);
     } catch {

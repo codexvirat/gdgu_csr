@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { db } from "@/lib/db";
 import { requireUser, companyScope } from "@/lib/auth";
@@ -7,7 +6,7 @@ import { can } from "@/lib/permissions";
 import { canAccessEvent } from "@/lib/event-access";
 import { maskAadhaar } from "@/lib/crypto";
 import { toCsv, toXlsxBuffer, type XlsxImage } from "@/lib/export";
-import { resolveUploadPath } from "@/lib/storage";
+import { readUploadedFile } from "@/lib/storage";
 
 export async function GET(request: NextRequest) {
   const session = await requireUser();
@@ -51,7 +50,7 @@ export async function GET(request: NextRequest) {
       const extension = path.extname(checkInPhoto).slice(1).toLowerCase();
       if (extension !== "jpeg" && extension !== "png") continue;
       try {
-        const buffer = await readFile(resolveUploadPath(checkInPhoto));
+        const { data: buffer } = await readUploadedFile(checkInPhoto);
         images.push({ row, col: photoColumn, buffer, extension });
       } catch {}
     }
