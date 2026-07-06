@@ -1,0 +1,618 @@
+// CSR & Corporate Training Management ERP — data model
+// See data/CSR_Training_ERP_TRD.md section 4 for the source spec.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  DIRECTOR
+  MANAGER
+  TRAINER
+  PA
+  VOLUNTEER
+  CLIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum EventStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ParticipantStatus {
+  REGISTERED
+  TRAINED
+  CERTIFIED
+  DROPPED
+}
+
+enum FeedbackQuestionType {
+  RATING
+  TEXT
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  gstin     String?
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+
+  users    User[]
+  clients  Client[]
+  projects Project[]
+  venues   Venue[]
+  vendors  Vendor[]
+  assets   Asset[]
+  trainers Trainer[]
+}
+
+model User {
+  id               String     @id @default(cuid())
+  companyId        String
+  company          Company    @relation(fields: [companyId], references: [id])
+  name             String
+  email            String     @unique
+  phone            String?
+  passwordHash     String
+  role             UserRole
+  status           UserStatus @default(ACTIVE)
+  clientId         String?
+  client           Client?    @relation(fields: [clientId], references: [id])
+  volunteerEventId String?
+  volunteerEvent   Event?     @relation("VolunteerEvent", fields: [volunteerEventId], references: [id])
+  lastLoginAt      DateTime?
+  createdAt        DateTime   @default(now())
+
+  createdProjects        Project[]           @relation("ProjectCreatedBy")
+  opsEvents              Event[]             @relation("EventOpsManager")
+  registeredParticipants Participant[]       @relation("ParticipantRegisteredBy")
+  managedParticipants    Participant[]       @relation("ParticipantManager")
+  uploadedDocuments      ProjectDocument[]
+  auditLogs              AuditLog[]
+  approvedExpenses       Expense[]           @relation("ExpenseApprovedBy")
+  approvedVendorTx       VendorTransaction[] @relation("VendorTxApprovedBy")
+  ratingsGiven           TrainerRating[]     @relation("RatingRatedBy")
+  trainerProfile         Trainer?
+  paAssignments          EventPA[]
+}
+
+model Client {
+  id             String   @id @default(cuid())
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id])
+  name           String
+  industry       String?
+  primaryContact String?
+  address        String?
+  createdAt      DateTime @default(now())
+
+  projects Project[]
+  users    User[]
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  companyId     String
+  company       Company       @relation(fields: [companyId], references: [id])
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id])
+  name          String
+  targetCount   Int
+  tradeCategory String
+  startDate     DateTime
+  endDate       DateTime
+  status        ProjectStatus @default(DRAFT)
+  budgetTotal   Float?
+  createdById   String
+  createdBy     User          @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime      @default(now())
+
+  cities        ProjectCity[]
+  events        Event[]
+  documents     ProjectDocument[]
+  participants  Participant[]
+  assessments          Assessment[]
+  feedbackForms        FeedbackForm[]
+  certificateTemplates CertificateTemplate[]
+  budgets              Budget[]
+  expenses             Expense[]
+}
+
+model ProjectCity {
+  id          String  @id @default(cuid())
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  city        String
+  targetCount Int
+
+  events Event[]
+
+  @@unique([projectId, city])
+}
+
+model ProjectDocument {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileName     String
+  fileUrl      String
+  version      Int      @default(1)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  uploadedAt   DateTime @default(now())
+}
+
+model Venue {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  name          String
+  address       String?
+  city          String
+  state         String?
+  contactPerson String?
+  contactPhone  String?
+  contactEmail  String?
+  capacity      Int?
+  facilities    String?
+  rateCard      String?
+  imageKeys     String   @default("[]")
+  createdAt     DateTime @default(now())
+
+  bookings VenueBooking[]
+  events   Event[]
+}
+
+model VenueBooking {
+  id           String   @id @default(cuid())
+  venueId      String
+  venue        Venue    @relation(fields: [venueId], references: [id])
+  eventId      String   @unique
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  bookingDate  DateTime
+  costIncurred Float?
+  notes        String?
+}
+
+model Trainer {
+  id             String   @id @default(cuid())
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id])
+  userId         String?  @unique
+  user           User?    @relation(fields: [userId], references: [id])
+  name           String
+  phone          String?
+  email          String?
+  skills         String?
+  certifications String?
+  feeStructure   String?
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+
+  eventAssignments EventTrainer[]
+  ratings          TrainerRating[]
+  participants     Participant[]
+}
+
+model EventTrainer {
+  id          String  @id @default(cuid())
+  eventId     String
+  event       Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  trainerId   String
+  trainer     Trainer @relation(fields: [trainerId], references: [id])
+  roleInEvent String?
+  feeAmount   Float?
+
+  @@unique([eventId, trainerId])
+}
+
+model TrainerRating {
+  id           String   @id @default(cuid())
+  trainerId    String
+  trainer      Trainer  @relation(fields: [trainerId], references: [id])
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id])
+  rating       Int
+  feedbackText String?
+  ratedById    String
+  ratedBy      User     @relation("RatingRatedBy", fields: [ratedById], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model Event {
+  id             String      @id @default(cuid())
+  projectId      String
+  project        Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectCityId  String
+  projectCity    ProjectCity @relation(fields: [projectCityId], references: [id])
+  venueId        String?
+  venue          Venue?      @relation(fields: [venueId], references: [id])
+  name               String
+  eventDateStart     DateTime
+  eventDateEnd       DateTime
+  targetCount        Int
+  status             EventStatus @default(SCHEDULED)
+  requiresAssessment Boolean     @default(true)
+  opsManagerId       String?
+  opsManager         User?       @relation("EventOpsManager", fields: [opsManagerId], references: [id])
+  eventPinHash       String?
+  eventPinEncrypted  String?
+  createdAt          DateTime    @default(now())
+
+  trainers           EventTrainer[]
+  pas                EventPA[]
+  trainerRatings     TrainerRating[]
+  participants       Participant[]
+  attendances        Attendance[]
+  assessmentResults  AssessmentResult[]
+  eventAssessments   EventAssessment[]
+  feedbackResponses  FeedbackResponse[]
+  eventFeedbacks     EventFeedback[]
+  certificates       Certificate[]
+  eventCertificates  EventCertificate[]
+  assetAllocations   AssetAllocation[]
+  vendorTransactions VendorTransaction[]
+  expenses           Expense[]
+  venueBooking       VenueBooking?
+  volunteers         User[]              @relation("VolunteerEvent")
+}
+
+model EventPA {
+  id         String   @id @default(cuid())
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  assignedAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+}
+
+model Participant {
+  id               String            @id @default(cuid())
+  projectId        String
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  eventId          String?
+  event            Event?            @relation(fields: [eventId], references: [id])
+  name             String
+  aadhaarEncrypted String
+  aadhaarHash      String
+  aadhaarLast4     String
+  mobile           String
+  address          String?
+  tradeCategory    String?
+  experienceYears  Int?
+  status           ParticipantStatus @default(REGISTERED)
+  registeredById   String
+  registeredBy     User              @relation("ParticipantRegisteredBy", fields: [registeredById], references: [id])
+  managerId        String?
+  manager          User?             @relation("ParticipantManager", fields: [managerId], references: [id])
+  trainerId        String?
+  trainer          Trainer?          @relation(fields: [trainerId], references: [id])
+  pinHash          String?
+  pinEncrypted     String?
+  clientUuid       String?           @unique
+  createdAt        DateTime          @default(now())
+
+  documents         ParticipantDocument[]
+  attendances       Attendance[]
+  assessmentResults AssessmentResult[]
+  feedbackResponses FeedbackResponse[]
+  certificates      Certificate[]
+
+  @@index([aadhaarHash])
+  @@index([mobile])
+  @@index([projectId])
+  @@index([eventId])
+}
+
+model ParticipantDocument {
+  id             String      @id @default(cuid())
+  participantId  String
+  participant    Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  docType        String
+  fileUrl        String
+  uploadedAt     DateTime    @default(now())
+  verifiedStatus String      @default("PENDING")
+}
+
+model Attendance {
+  id            String      @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  eventId       String
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  checkInAt     DateTime?
+  checkOutAt    DateTime?
+  checkInPhoto  String?
+  qrCodeValue   String?
+  clientUuid    String      @unique
+  createdAt     DateTime    @default(now())
+
+  @@unique([participantId, eventId])
+}
+
+model Assessment {
+  id            String   @id @default(cuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradeCategory String?
+  title         String
+  passMark      Int
+  totalMarks    Int
+  createdAt     DateTime @default(now())
+
+  questions        AssessmentQuestion[]
+  results          AssessmentResult[]
+  eventAssessments EventAssessment[]
+}
+
+/** Explicit per-event allotment of a question paper — the same Assessment can be allotted
+ * to many events of its own project, and each allotment is published independently. */
+model EventAssessment {
+  id           String     @id @default(cuid())
+  eventId      String
+  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  allottedAt   DateTime   @default(now())
+  isPublished  Boolean    @default(false)
+  publishedAt  DateTime?
+
+  @@unique([eventId, assessmentId])
+}
+
+model AssessmentQuestion {
+  id            String     @id @default(cuid())
+  assessmentId  String
+  assessment    Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questionText  String
+  options       String
+  correctOption String
+}
+
+model AssessmentResult {
+  id             String      @id @default(cuid())
+  assessmentId   String
+  assessment     Assessment  @relation(fields: [assessmentId], references: [id])
+  participantId  String
+  participant    Participant @relation(fields: [participantId], references: [id])
+  eventId        String
+  event          Event       @relation(fields: [eventId], references: [id])
+  totalQuestions Int
+  attemptedCount Int
+  correctCount   Int
+  score          Int
+  status         String
+  attemptedAt    DateTime    @default(now())
+  mode           String
+}
+
+model FeedbackForm {
+  id            String   @id @default(cuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradeCategory String?
+  title         String
+  createdAt     DateTime @default(now())
+
+  questions      FeedbackQuestion[]
+  responses      FeedbackResponse[]
+  eventFeedbacks EventFeedback[]
+}
+
+/** Explicit per-event allotment of a feedback form — mirrors EventAssessment. */
+model EventFeedback {
+  id             String       @id @default(cuid())
+  eventId        String
+  event          Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  feedbackFormId String
+  feedbackForm   FeedbackForm @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
+  allottedAt     DateTime     @default(now())
+  isPublished    Boolean      @default(false)
+  publishedAt    DateTime?
+
+  @@unique([eventId, feedbackFormId])
+}
+
+model FeedbackQuestion {
+  id             String               @id @default(cuid())
+  feedbackFormId String
+  feedbackForm   FeedbackForm         @relation(fields: [feedbackFormId], references: [id], onDelete: Cascade)
+  questionText   String
+  type           FeedbackQuestionType
+
+  answers FeedbackAnswer[]
+}
+
+model FeedbackResponse {
+  id             String       @id @default(cuid())
+  feedbackFormId String
+  feedbackForm   FeedbackForm @relation(fields: [feedbackFormId], references: [id])
+  participantId  String
+  participant    Participant  @relation(fields: [participantId], references: [id])
+  eventId        String
+  event          Event        @relation(fields: [eventId], references: [id])
+  submittedAt    DateTime     @default(now())
+
+  answers FeedbackAnswer[]
+
+  @@unique([feedbackFormId, participantId])
+}
+
+model FeedbackAnswer {
+  id          String           @id @default(cuid())
+  responseId  String
+  response    FeedbackResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId  String
+  question    FeedbackQuestion @relation(fields: [questionId], references: [id])
+  ratingValue Int?
+  textValue   String?
+}
+
+model CertificateTemplate {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tradeCategory  String?
+  title          String
+  bodyText       String
+  logos          String   @default("[]")
+  signatoryName  String
+  signatoryTitle String
+  signatureImage String?
+  stampImage     String?
+  accentColor    String   @default("#1e3a8a")
+  layout         String   @default("driiv")
+  createdAt      DateTime @default(now())
+
+  eventCertificates EventCertificate[]
+}
+
+/** Explicit per-event allotment of a certificate template — mirrors EventAssessment/EventFeedback. */
+model EventCertificate {
+  id                    String              @id @default(cuid())
+  eventId               String
+  event                 Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  certificateTemplateId String
+  certificateTemplate   CertificateTemplate @relation(fields: [certificateTemplateId], references: [id], onDelete: Cascade)
+  allottedAt            DateTime            @default(now())
+  isPublished           Boolean             @default(false)
+  publishedAt           DateTime?
+
+  certificates Certificate[]
+
+  @@unique([eventId, certificateTemplateId])
+}
+
+model Certificate {
+  id                 String           @id @default(cuid())
+  eventCertificateId String
+  eventCertificate   EventCertificate @relation(fields: [eventCertificateId], references: [id], onDelete: Cascade)
+  participantId      String
+  participant        Participant      @relation(fields: [participantId], references: [id])
+  eventId            String
+  event              Event            @relation(fields: [eventId], references: [id])
+  certificateNumber  String           @unique
+  verifyToken        String           @unique
+  fileUrl            String
+  status             String           @default("ACTIVE")
+  issuedAt           DateTime         @default(now())
+
+  @@unique([eventCertificateId, participantId])
+}
+
+model Vendor {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  name        String
+  category    String
+  contact     String?
+  rateHistory String?
+  createdAt   DateTime @default(now())
+
+  transactions VendorTransaction[]
+  expenses     Expense[]
+}
+
+model VendorTransaction {
+  id              String   @id @default(cuid())
+  vendorId        String
+  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  eventId         String?
+  event           Event?   @relation(fields: [eventId], references: [id])
+  amount          Float
+  description     String?
+  transactionDate DateTime @default(now())
+  approvedById    String?
+  approvedBy      User?    @relation("VendorTxApprovedBy", fields: [approvedById], references: [id])
+}
+
+model Asset {
+  id           String   @id @default(cuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id])
+  name         String
+  category     String?
+  serialNumber String?
+  condition    String?
+  status       String   @default("AVAILABLE")
+  createdAt    DateTime @default(now())
+
+  allocations AssetAllocation[]
+}
+
+model AssetAllocation {
+  id                String    @id @default(cuid())
+  assetId           String
+  asset             Asset     @relation(fields: [assetId], references: [id])
+  eventId           String
+  event             Event     @relation(fields: [eventId], references: [id])
+  allocatedAt       DateTime  @default(now())
+  returnedAt        DateTime?
+  conditionOnReturn String?
+}
+
+model Budget {
+  id              String  @id @default(cuid())
+  projectId       String
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category        String
+  allocatedAmount Float
+
+  @@unique([projectId, category])
+}
+
+model Expense {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  eventId        String?
+  event          Event?   @relation(fields: [eventId], references: [id])
+  budgetCategory String
+  amount         Float
+  vendorId       String?
+  vendor         Vendor?  @relation(fields: [vendorId], references: [id])
+  description    String?
+  approvedById   String?
+  approvedBy     User?    @relation("ExpenseApprovedBy", fields: [approvedById], references: [id])
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  entityType  String
+  entityId    String
+  action      String
+  beforeValue String?
+  afterValue  String?
+  timestamp   DateTime @default(now())
+}
