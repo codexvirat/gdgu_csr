@@ -1,7 +1,7 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { encryptAadhaar, encryptPin } from "../src/lib/crypto";
 import { buildAttendanceQrValue } from "../src/lib/qrcode";
 
@@ -9,7 +9,10 @@ function randomPin() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
-const adapter = new PrismaBetterSqlite3({ url: process.env.DATABASE_URL! });
+const adapter = new PrismaLibSql({
+  url: process.env.DATABASE_URL!,
+  authToken: process.env.DATABASE_AUTH_TOKEN,
+});
 const db = new PrismaClient({ adapter });
 
 async function main() {
